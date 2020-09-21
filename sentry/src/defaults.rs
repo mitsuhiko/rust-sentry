@@ -1,8 +1,8 @@
-#![cfg_attr(feature = "error-chain", allow(deprecated))]
-#![cfg_attr(feature = "failure", allow(deprecated))]
+#![allow(deprecated)]
 
+use std::borrow::Cow;
 use std::env;
-use std::{borrow::Cow, sync::Arc};
+use std::sync::Arc;
 
 use crate::transports::DefaultTransportFactory;
 use crate::types::Dsn;
@@ -36,12 +36,12 @@ use crate::{ClientOptions, Integration};
 /// std::env::set_var("SENTRY_RELEASE", "release-from-env");
 ///
 /// let options = sentry::ClientOptions::default();
-/// assert_eq!(options.release, None);
-/// assert!(options.transport.is_none());
+/// assert_eq!(options.release(), None);
+/// assert!(!options.has_transport());
 ///
 /// let options = sentry::apply_defaults(options);
-/// assert_eq!(options.release, Some("release-from-env".into()));
-/// assert!(options.transport.is_some());
+/// assert_eq!(options.release(), Some("release-from-env".into()));
+/// assert!(options.has_transport());
 /// ```
 ///
 /// [`AttachStacktraceIntegration`]: integrations/backtrace/struct.AttachStacktraceIntegration.html
@@ -52,13 +52,14 @@ use crate::{ClientOptions, Integration};
 /// [`PanicIntegration`]: integrations/panic/struct.PanicIntegration.html
 /// [`ProcessStacktraceIntegration`]: integrations/backtrace/struct.ProcessStacktraceIntegration.html
 pub fn apply_defaults(mut opts: ClientOptions) -> ClientOptions {
-    if opts.transport.is_none() {
-        opts.transport = Some(Arc::new(DefaultTransportFactory));
+    if !opts.has_transport() {
+        opts.set_transport(DefaultTransportFactory);
     }
-    if opts.default_integrations {
+    if opts.default_integrations() {
         // default integrations need to be ordered *before* custom integrations,
         // since they also process events in order
         let mut integrations: Vec<Arc<dyn Integration>> = vec![];
+
         #[cfg(feature = "backtrace")]
         {
             integrations.push(Arc::new(
@@ -101,41 +102,52 @@ pub fn apply_defaults(mut opts: ClientOptions) -> ClientOptions {
                 sentry_backtrace::ProcessStacktraceIntegration::default(),
             ));
         }
+
+        integrations.reverse();
         integrations.extend(opts.integrations.into_iter());
         opts.integrations = integrations;
     }
-    if opts.dsn.is_none() {
-        opts.dsn = env::var("SENTRY_DSN")
+    if opts.dsn().is_none() {
+        if let Some(dsn) = env::var("SENTRY_DSN")
             .ok()
-            .and_then(|dsn| dsn.parse::<Dsn>().ok());
+            .and_then(|dsn| dsn.parse::<Dsn>().ok())
+        {
+            opts.set_dsn(dsn);
+        }
     }
-    if opts.release.is_none() {
-        opts.release = env::var("SENTRY_RELEASE").ok().map(Cow::Owned);
+    if opts.release().is_none() {
+        opts.set_release(env::var("SENTRY_RELEASE").ok().map(Cow::Owned));
     }
-    if opts.environment.is_none() {
-        opts.environment = env::var("SENTRY_ENVIRONMENT")
-            .ok()
-            .map(Cow::Owned)
-            .or_else(|| {
-                Some(Cow::Borrowed(if cfg!(debug_assertions) {
-                    "debug"
-                } else {
-                    "release"
-                }))
-            });
+    if opts.environment().is_none() {
+        opts.set_environment(
+            env::var("SENTRY_ENVIRONMENT")
+                .ok()
+                .map(Cow::Owned)
+                .or_else(|| {
+                    Some(Cow::Borrowed(if cfg!(debug_assertions) {
+                        "debug"
+                    } else {
+                        "release"
+                    }))
+                }),
+        );
     }
-    if opts.http_proxy.is_none() {
-        opts.http_proxy = std::env::var("HTTP_PROXY")
-            .ok()
-            .map(Cow::Owned)
-            .or_else(|| std::env::var("http_proxy").ok().map(Cow::Owned));
+    if opts.http_proxy().is_none() {
+        opts.set_http_proxy(
+            std::env::var("HTTP_PROXY")
+                .ok()
+                .map(Cow::Owned)
+                .or_else(|| std::env::var("http_proxy").ok().map(Cow::Owned)),
+        );
     }
-    if opts.https_proxy.is_none() {
-        opts.https_proxy = std::env::var("HTTPS_PROXY")
-            .ok()
-            .map(Cow::Owned)
-            .or_else(|| std::env::var("https_proxy").ok().map(Cow::Owned))
-            .or_else(|| opts.http_proxy.clone());
+    if opts.https_proxy().is_none() {
+        opts.set_https_proxy(
+            std::env::var("HTTPS_PROXY")
+                .ok()
+                .map(Cow::Owned)
+                .or_else(|| std::env::var("https_proxy").ok().map(Cow::Owned))
+                .or_else(|| opts.http_proxy()),
+        );
     }
     opts
 }

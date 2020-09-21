@@ -65,10 +65,9 @@ impl Drop for ClientInitGuard {
 /// created to enable further configuration:
 ///
 /// ```
-/// let sentry = sentry::init(sentry::ClientOptions {
-///     release: Some("foo-bar-baz@1.0.0".into()),
-///     ..Default::default()
-/// });
+/// let sentry = sentry::init(sentry::ClientOptions::configure(|o| {
+///     o.set_release(Some("foo-bar-baz@1.0.0".into()))
+/// }));
 /// if sentry.is_enabled() {
 ///     // some other initialization
 /// }
@@ -91,7 +90,7 @@ where
     C: Into<ClientOptions>,
 {
     let opts = apply_defaults(opts.into());
-    let auto_session_tracking = opts.auto_session_tracking;
+    let auto_session_tracking = opts.auto_session_tracking();
     let client = Arc::new(Client::from(opts));
 
     Hub::with(|hub| hub.bind_client(Some(client.clone())));

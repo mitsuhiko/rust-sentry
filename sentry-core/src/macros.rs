@@ -8,10 +8,9 @@
 /// ```
 /// # #[macro_use] extern crate sentry;
 /// # fn main() {
-/// let _sentry = sentry::init(sentry::ClientOptions {
-///     release: sentry::release_name!(),
-///     ..Default::default()
-/// });
+/// let _sentry = sentry::init(sentry::ClientOptions::configure(|o| {
+///     o.set_release(sentry::release_name!())
+/// }));
 /// # }
 /// ```
 #[macro_export]
@@ -60,7 +59,7 @@ macro_rules! sentry_debug {
         }
         #[cfg(not(feature = "debug-logs"))] {
             $crate::Hub::with(|hub| {
-                if hub.client().map_or(false, |c| c.options().debug) {
+                if hub.client().map_or(false, |c| c.options().debug()) {
                     eprint!("[sentry] ");
                     eprintln!($($arg)*);
                 }

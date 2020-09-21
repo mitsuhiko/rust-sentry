@@ -39,11 +39,10 @@ lazy_static::lazy_static! {
 /// use std::sync::Arc;
 ///
 /// let transport = TestTransport::new();
-/// let options = ClientOptions {
-///     dsn: Some("https://public@example.com/1".parse().unwrap()),
-///     transport: Some(Arc::new(transport.clone())),
-///     ..ClientOptions::default()
-/// };
+/// let options = ClientOptions::configure(|o| {
+///     o.set_dsn("https://public@example.com/1".parse().unwrap())
+///     .set_transport(transport.clone())
+/// });
 /// Hub::current().bind_client(Some(Arc::new(options.into())));
 /// ```
 pub struct TestTransport {
@@ -121,9 +120,13 @@ pub fn with_captured_envelopes_options<F: FnOnce(), O: Into<ClientOptions>>(
     f: F,
     options: O,
 ) -> Vec<Envelope> {
+    #![allow(deprecated)]
+
     let transport = TestTransport::new();
     let mut options = options.into();
-    options.dsn = Some(options.dsn.unwrap_or_else(|| TEST_DSN.clone()));
+    if options.dsn().is_none() {
+        options.set_dsn(TEST_DSN.clone());
+    }
     options.transport = Some(Arc::new(transport.clone()));
     Hub::run(
         Arc::new(Hub::new(

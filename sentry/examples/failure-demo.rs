@@ -20,10 +20,9 @@ fn execute() -> Result<(), failure::Error> {
 }
 
 fn main() {
-    let _sentry = sentry::init(sentry::ClientOptions {
-        release: sentry::release_name!(),
-        ..Default::default()
-    });
+    let _sentry = sentry::init(sentry::ClientOptions::configure(|o| {
+        o.set_release(sentry::release_name!())
+    }));
 
     if let Err(err) = execute() {
         println!("error: {}", err);
